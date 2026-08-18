@@ -1,0 +1,1 @@
+(function(){function fix(){document.querySelectorAll('a.nav').forEach(a=>{a.onclick=null})}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fix);else fix()})();
