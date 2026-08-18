@@ -36,7 +36,7 @@ export default async function handler(req, res) {
 
     const prompt = `You are a disciplined XAUUSD market-analysis assistant. Use ONLY the market data supplied below. Do not invent candles, FVGs, order blocks, liquidity levels, or news. If OHLC candles are absent, explicitly say that SMC/FVG/OB confirmation is unavailable. Return valid JSON with keys: bias, confidence, trend, marketStructure, liquidity, fvgOrderBlock, entry, stopLoss, tp1, tp2, riskReward, invalidation, reasoning. Timeframe: ${timeframe}. User request: ${question}. Live spot payload: ${JSON.stringify(spot)}`;
 
-    const ai = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+    const ai = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
