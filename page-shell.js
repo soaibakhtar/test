@@ -1,6 +1,6 @@
 (function(){
   const page=document.body.dataset.page||'dashboard';
-  const routes={dashboard:{href:'/',label:'Dashboard',title:'Dashboard',view:'dashboard'},tradingview:{href:'/tradingview/',label:'TradingView',title:'TradingView',view:'chartview'},analysis:{href:'/ai-analysis/',label:'AI Analysis',title:'AI Analysis',view:'analysis'},signals:{href:'/signals/',label:'Signals',title:'Signals',view:'signals'},risk:{href:'/risk-calculator/',label:'Risk Calculator',title:'Risk Calculator',view:'risk'},settings:{href:'/settings/',label:'Settings',title:'Settings',view:'settings'},prolab:{href:'/pro-lab/',label:'Pro Lab',title:'Pro Lab',view:'pro'}};
+  const routes={dashboard:{href:'/',label:'Dashboard',title:'Dashboard',view:'dashboard'},tradingview:{href:'/tradingview/',label:'TradingView',title:'TradingView',view:'chartview'},analysis:{href:'/ai-analysis/',label:'AI Analysis',title:'AI Analysis',view:'analysis'},signals:{href:'/signals/',label:'Signals',title:'Signals',view:'signals'},risk:{href:'/risk-calculator/',label:'Risk Calculator',title:'Risk Calculator',view:'risk'},settings:{href:'/settings/',label:'Settings',title:'Settings',view:'settings'},prolab:{href:'/pro-lab-v2/',label:'Pro Lab',title:'Pro Lab',view:'pro'}};
   const links=['dashboard','tradingview','analysis','signals','risk','settings','prolab'];
   const icons={dashboard:'◈',tradingview:'▥',analysis:'◎',signals:'↯',risk:'▣',settings:'⚙',prolab:'✦'};
   function boot(){
