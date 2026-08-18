@@ -1,61 +1,145 @@
 //@version=5
-indicator("GoldX AI Trader — TradingView Bridge", overlay=true, max_labels_count=200)
+indicator("GoldX AI Trader — Auto SMC Signals", overlay=true, max_labels_count=100, max_lines_count=100, max_boxes_count=40)
 
-// Use on XAUUSD. Create a TradingView alert using: Any alert() function call.
+// Designed for XAUUSD. The script draws TradingView-computed structure and
+// confluence signals directly on the chart. It does NOT scrape TradingView.
+// For the external Gemini agent, use the alert() webhook payload below.
+
 pivotLen = input.int(3, "Swing length", minval=2, maxval=10)
-showLevels = input.bool(true, "Show structure levels")
+emaFastLen = input.int(9, "Fast EMA", minval=2)
+emaSlowLen = input.int(15, "Slow EMA", minval=3)
+rsiLen = input.int(14, "RSI length", minval=2)
+minScore = input.int(4, "Minimum signal score", minval=3, maxval=6)
+showStructure = input.bool(true, "Draw market structure")
+showFvg = input.bool(true, "Draw FVG zones")
+showLevels = input.bool(true, "Draw trigger levels")
+showSignals = input.bool(true, "Draw BUY/SELL signals")
+showReasons = input.bool(true, "Show signal reason")
+
+emaFast = ta.ema(close, emaFastLen)
+emaSlow = ta.ema(close, emaSlowLen)
+rsi = ta.rsi(close, rsiLen)
 
 ph = ta.pivothigh(high, pivotLen, pivotLen)
 pl = ta.pivotlow(low, pivotLen, pivotLen)
 
 var float lastHigh = na
+var float prevHigh = na
 var float lastLow = na
+var float prevLow = na
+
 if not na(ph)
+    prevHigh := lastHigh
     lastHigh := ph
 if not na(pl)
+    prevLow := lastLow
     lastLow := pl
 
 bullBos = not na(lastHigh) and close > lastHigh and close[1] <= lastHigh
 bearBos = not na(lastLow) and close < lastLow and close[1] >= lastLow
 
-// Simple displacement/FVG proxy from three candles. These are explicitly labeled
-// as TradingView-computed context and should not be treated as guaranteed signals.
+var string marketStructure = "RANGE"
+if bullBos
+    marketStructure := "BOS BULL"
+else if bearBos
+    marketStructure := "BOS BEAR"
+else if not na(prevHigh) and not na(prevLow) and lastHigh > prevHigh and lastLow > prevLow
+    marketStructure := "HH + HL"
+else if not na(prevHigh) and not na(prevLow) and lastHigh < prevHigh and lastLow < prevLow
+    marketStructure := "LH + LL"
+else
+    marketStructure := "RANGE"
+
+bullChoch = marketStructure == "LH + LL" and bullBos
+bearChoch = marketStructure == "HH + HL" and bearBos
+
+// FVG proxy: third candle leaves a gap against the first candle.
 bullFvg = low > high[2]
 bearFvg = high < low[2]
 
-var string structure = "RANGE"
-if bullBos
-    structure := "BOS BULL"
-if bearBos
-    structure := "BOS BEAR"
+// Liquidity sweep proxy: current bar takes a recent swing and closes back inside.
+bullSweep = not na(lastLow) and low < lastLow and close > lastLow
+bearSweep = not na(lastHigh) and high > lastHigh and close < lastHigh
 
-plot(showLevels ? lastHigh : na, "Swing High", color=color.new(color.red, 45), style=plot.style_linebr)
-plot(showLevels ? lastLow : na, "Swing Low", color=color.new(color.green, 45), style=plot.style_linebr)
-plotshape(bullBos, title="Bull BOS", style=shape.labelup, text="BOS↑", location=location.belowbar, color=color.new(color.green, 0), textcolor=color.white, size=size.tiny)
-plotshape(bearBos, title="Bear BOS", style=shape.labeldown, text="BOS↓", location=location.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.tiny)
-plotshape(bullFvg, title="Bull FVG", style=shape.circle, location=location.belowbar, color=color.new(color.green, 20), size=size.tiny)
-plotshape(bearFvg, title="Bear FVG", style=shape.circle, location=location.abovebar, color=color.new(color.red, 20), size=size.tiny)
+bullTrend = emaFast > emaSlow and close > emaFast
+bearTrend = emaFast < emaSlow and close < emaFast
+bullMomentum = rsi > 52
+bearMomentum = rsi < 48
 
+bullScore = (bullBos ? 2 : 0) + (bullSweep ? 1 : 0) + (bullFvg ? 1 : 0) + (bullTrend ? 1 : 0) + (bullMomentum ? 1 : 0)
+bearScore = (bearBos ? 2 : 0) + (bearSweep ? 1 : 0) + (bearFvg ? 1 : 0) + (bearTrend ? 1 : 0) + (bearMomentum ? 1 : 0)
+
+buySignal = barstate.isconfirmed and bullScore >= minScore and bullScore > bearScore
+sellSignal = barstate.isconfirmed and bearScore >= minScore and bearScore > bullScore
+
+// Avoid printing duplicate signals on consecutive bars.
+newBuy = buySignal and not buySignal[1]
+newSell = sellSignal and not sellSignal[1]
+
+buyReason = "BUY: " + (bullBos ? "BOS + " : "") + (bullSweep ? "Liquidity sweep + " : "") + (bullFvg ? "Bull FVG + " : "") + (bullTrend ? "EMA trend + " : "") + (bullMomentum ? "Momentum" : "")
+sellReason = "SELL: " + (bearBos ? "BOS + " : "") + (bearSweep ? "Liquidity sweep + " : "") + (bearFvg ? "Bear FVG + " : "") + (bearTrend ? "EMA trend + " : "") + (bearMomentum ? "Momentum" : "")
+
+plot(emaFast, "EMA 9", color=color.new(color.yellow, 0), linewidth=1)
+plot(emaSlow, "EMA 15", color=color.new(color.orange, 10), linewidth=1)
+
+plot(showLevels and not na(lastHigh) ? lastHigh : na, "Liquidity High", color=color.new(color.red, 40), style=plot.style_linebr)
+plot(showLevels and not na(lastLow) ? lastLow : na, "Liquidity Low", color=color.new(color.green, 40), style=plot.style_linebr)
+
+plotshape(showStructure and bullBos, title="Bull BOS", style=shape.labelup, text="BOS ↑", location=location.belowbar, color=color.new(color.green, 0), textcolor=color.white, size=size.tiny)
+plotshape(showStructure and bearBos, title="Bear BOS", style=shape.labeldown, text="BOS ↓", location=location.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.tiny)
+plotshape(showStructure and bullChoch, title="Bull CHOCH", style=shape.labelup, text="CHOCH ↑", location=location.belowbar, color=color.new(color.teal, 0), textcolor=color.white, size=size.tiny)
+plotshape(showStructure and bearChoch, title="Bear CHOCH", style=shape.labeldown, text="CHOCH ↓", location=location.abovebar, color=color.new(color.maroon, 0), textcolor=color.white, size=size.tiny)
+
+plotshape(showSignals and newBuy, title="BUY Signal", style=shape.labelup, text="BUY", location=location.belowbar, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
+plotshape(showSignals and newSell, title="SELL Signal", style=shape.labeldown, text="SELL", location=location.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
+
+if showReasons and newBuy
+    label.new(bar_index, low, buyReason, style=label.style_label_up, color=color.new(color.green, 5), textcolor=color.white, size=size.small)
+if showReasons and newSell
+    label.new(bar_index, high, sellReason, style=label.style_label_down, color=color.new(color.red, 5), textcolor=color.white, size=size.small)
+
+// Draw recent FVG zones.
+if showFvg and bullFvg
+    box.new(left=bar_index - 2, top=low, right=bar_index, bottom=high[2], bgcolor=color.new(color.green, 90), border_color=color.new(color.green, 55))
+if showFvg and bearFvg
+    box.new(left=bar_index - 2, top=low[2], right=bar_index, bottom=high, bgcolor=color.new(color.red, 90), border_color=color.new(color.red, 55))
+
+// Optional current trigger map: breakout levels only, not instant entries.
+plot(showLevels and not na(lastHigh) ? lastHigh : na, "BUY ABOVE", color=color.new(color.green, 70), linewidth=2, style=plot.style_linebr)
+plot(showLevels and not na(lastLow) ? lastLow : na, "SELL BELOW", color=color.new(color.red, 70), linewidth=2, style=plot.style_linebr)
+
+// Alert payload for GoldX AI webhook.
 f_num(x) => str.tostring(x, format.mintick)
 f_json(s) => str.replace_all(str.replace_all(s, "\\", "\\\\"), "\"", "\\\"")
+reason = newBuy ? buyReason : newSell ? sellReason : "WAIT: no confirmed confluence signal"
+signal = newBuy ? "BUY" : newSell ? "SELL" : "WAIT"
 
 payload = '{' +
   '"source":"tradingview",' +
   '"symbol":"' + syminfo.tickerid + '",' +
   '"timeframe":"' + timeframe.period + '",' +
   '"time":' + str.tostring(time) + ',' +
+  '"signal":"' + signal + '",' +
   '"open":' + f_num(open) + ',' +
   '"high":' + f_num(high) + ',' +
   '"low":' + f_num(low) + ',' +
   '"close":' + f_num(close) + ',' +
   '"volume":' + f_num(volume) + ',' +
+  '"ema9":' + f_num(emaFast) + ',' +
+  '"ema15":' + f_num(emaSlow) + ',' +
+  '"rsi":' + f_num(rsi) + ',' +
   '"swingHigh":' + (na(lastHigh) ? "null" : f_num(lastHigh)) + ',' +
   '"swingLow":' + (na(lastLow) ? "null" : f_num(lastLow)) + ',' +
-  '"structure":"' + f_json(structure) + '",' +
+  '"structure":"' + f_json(marketStructure) + '",' +
   '"bullBos":' + str.tostring(bullBos) + ',' +
   '"bearBos":' + str.tostring(bearBos) + ',' +
+  '"bullSweep":' + str.tostring(bullSweep) + ',' +
+  '"bearSweep":' + str.tostring(bearSweep) + ',' +
   '"bullFvg":' + str.tostring(bullFvg) + ',' +
-  '"bearFvg":' + str.tostring(bearFvg) +
+  '"bearFvg":' + str.tostring(bearFvg) + ',' +
+  '"bullScore":' + str.tostring(bullScore) + ',' +
+  '"bearScore":' + str.tostring(bearScore) + ',' +
+  '"reason":"' + f_json(reason) + '"' +
   '}'
 
 if barstate.isconfirmed
